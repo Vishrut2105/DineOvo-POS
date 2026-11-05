@@ -45,7 +45,8 @@ export default function Expenses() {
     // Bounded by the picked range — this used to pull the entire table on every visit.
     const { fromUtc, toUtc } = rangeRef.current;
     const { data } = await supabase
-      .from('expenses').select('*')
+      .from('expenses')
+      .select('id, description, amount, category, date, payment_method, vendor, notes')
       .gte('date', fromUtc).lt('date', toUtc)
       .order('date', { ascending: false });
     if (data) setExpenses(data);
@@ -56,12 +57,22 @@ export default function Expenses() {
   }, [range.fromUtc, range.toUtc]);
 
   useEffect(() => {
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchExpenses, 3000);
+    };
+
     const subscription = supabase
       .channel('expenses_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchExpenses)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, debouncedFetch)
       .subscribe();
 
-    return () => supabase.removeChannel(subscription);
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(subscription);
+    };
   }, []);
 
   const resetForm = () => {

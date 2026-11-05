@@ -26,7 +26,7 @@ export default function Vendors() {
   const fetchVendors = useCallback(async () => {
     const { data, error } = await supabase
       .from('vendors')
-      .select('*')
+      .select('id, name, contact_person, phone, email, address, products, outstanding_amount, notes, created_at')
       .order('created_at', { ascending: false });
     if (!error) setVendors(data || []);
   }, []);
@@ -35,12 +35,20 @@ export default function Vendors() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchVendors();
 
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchVendors, 3000);
+    };
+
     const sub = supabase
       .channel('vendors_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors' }, fetchVendors)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(sub);
     };
   }, [fetchVendors]);

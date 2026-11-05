@@ -16,13 +16,13 @@ export default function Salaries() {
 
   const fetchData = useCallback(async () => {
     // Fetch employees for the dropdown and join
-    const { data: empData } = await supabase.from('employees').select('*').order('full_name');
+    const { data: empData } = await supabase.from('employees').select('id, full_name, position, monthly_salary').order('full_name');
     if (empData) setEmployees(empData);
 
     // Fetch salaries
     const { data: salData, error } = await supabase
       .from('salaries')
-      .select('*, employees(full_name, position)')
+      .select('id, employee_id, amount, month, year, payment_date, payment_method, status, remarks, employees(full_name, position)')
       .order('payment_date', { ascending: false });
     if (!error) setSalaries(salData || []);
   }, []);
@@ -31,13 +31,21 @@ export default function Salaries() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
 
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchData, 3000);
+    };
+
     const sub = supabase
       .channel('salaries_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salaries' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'salaries' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(sub);
     };
   }, [fetchData]);

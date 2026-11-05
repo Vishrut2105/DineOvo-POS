@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { logSupabaseRead } from '../lib/egressLogger';
 import { orderRevenue, orderLostRevenue, isRevenueOrder } from '../lib/orderTotals';
 import { DollarSign, ShoppingBag, TrendingUp, TrendingDown, PackageOpen, LayoutDashboard, Clock, Activity, CreditCard } from 'lucide-react';
 import {
@@ -31,10 +32,10 @@ export default function Analytics() {
     const { fromUtc, toUtc } = range;
 
     const [ordersRes, expensesRes, menuRes, invRes, taxRes] = await Promise.all([
-      supabase.from('orders').select('*, order_items(*)').gte('created_at', fromUtc).lt('created_at', toUtc),
-      supabase.from('expenses').select('*').gte('date', fromUtc).lt('date', toUtc),
+      supabase.from('orders').select('id, created_at, status, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, payment_method, customer_name, table_no, order_items(id, item_id, custom_name, quantity, price, status, batch, created_at)').gte('created_at', fromUtc).lt('created_at', toUtc),
+      supabase.from('expenses').select('id, amount, date').gte('date', fromUtc).lt('date', toUtc),
       supabase.from('menu_items').select('id, name, category'),
-      supabase.from('inventory').select('*'),
+      supabase.from('inventory').select('id, quantity, min_stock'),
       supabase.from('app_settings').select('value').eq('key', 'tax_rate').maybeSingle()
     ]);
 

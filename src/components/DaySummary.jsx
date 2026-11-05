@@ -53,7 +53,7 @@ export default function DaySummary({ day: controlledDay, onDayChange }) {
       const { fromUtc, toUtc } = businessDayRangeUtc(day, day);
 
       const [ordersRes, expensesRes] = await Promise.all([
-        supabase.from('orders').select('*, order_items(*)').gte('created_at', fromUtc).lt('created_at', toUtc),
+        supabase.from('orders').select('id, order_number, invoice_number, created_at, customer_name, table_no, status, grand_total, discount_amount, discount_type, discount_value, taxable_value, cgst_amount, sgst_amount, round_off, paid_cash, paid_upi, paid_card, payment_method, tax_rate_percent, order_items(id, status, quantity, price, custom_name, item_id)').gte('created_at', fromUtc).lt('created_at', toUtc),
         supabase.from('expenses').select('amount, date, description, category').gte('date', fromUtc).lt('date', toUtc),
       ]);
 

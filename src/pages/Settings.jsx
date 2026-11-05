@@ -88,7 +88,7 @@ export default function Settings({ tables, refreshTables, daysLeft = 30, expiryD
       if (!user) return;
       const { data, error } = await supabase
         .from('active_sessions')
-        .select('*')
+        .select('id, device_id, device_name, last_active, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -269,7 +269,7 @@ export default function Settings({ tables, refreshTables, daysLeft = 30, expiryD
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase.from('app_settings').select('*');
+      const { data, error } = await supabase.from('app_settings').select('key, value');
       if (error) throw error;
       
       if (data && data.length > 0) {

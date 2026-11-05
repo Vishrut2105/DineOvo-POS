@@ -16,9 +16,9 @@ export default function Recipes() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const [{ data: menuData }, { data: invData }, { data: recipeData }] = await Promise.all([
-      supabase.from('menu_items').select('*').order('name'),
-      supabase.from('inventory').select('*').order('name'),
-      supabase.from('recipe_items').select('*, inventory(name, unit)')
+      supabase.from('menu_items').select('id, name, price, category').order('name'),
+      supabase.from('inventory').select('id, name, unit').order('name'),
+      supabase.from('recipe_items').select('id, menu_item_id, inventory_id, quantity, inventory(name, unit)')
     ]);
     if (menuData) setMenuItems(menuData);
     if (invData) setInventory(invData);
@@ -29,12 +29,22 @@ export default function Recipes() {
   useEffect(() => {
     fetchAll();
 
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchAll, 3000);
+    };
+
     const sub = supabase
       .channel('recipes_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipe_items' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipe_items' }, debouncedFetch)
       .subscribe();
 
-    return () => supabase.removeChannel(sub);
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(sub);
+    };
   }, [fetchAll]);
 
   // Group recipes by menu_item_id for easy lookup

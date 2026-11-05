@@ -13,7 +13,7 @@ export default function Reservations({ tables }) {
   const fetchReservations = useCallback(async () => {
     const { data, error } = await supabase
       .from('reservations')
-      .select('*')
+      .select('id, customer_name, phone, guest_count, reservation_date, reservation_time, table_no, status, notes')
       .order('reservation_date', { ascending: true })
       .order('reservation_time', { ascending: true });
     if (!error) setReservations(data || []);
@@ -21,13 +21,20 @@ export default function Reservations({ tables }) {
 
   useEffect(() => {
     fetchReservations();
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchReservations, 3000);
+    };
 
     const sub = supabase
       .channel('reservations_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, fetchReservations)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(sub);
     };
   }, [fetchReservations]);

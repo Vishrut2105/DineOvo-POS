@@ -24,7 +24,7 @@ export default function Reports() {
     // Revenue — orders have no stored total; it's derived from order_items, same as the Revenue page.
     const { data: orderData } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('id, created_at, status, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, payment_method, tax_rate_percent, order_items(id, price, quantity, status)')
       .gte('created_at', range.fromUtc)
       .lt('created_at', range.toUtc);
 
@@ -72,7 +72,12 @@ export default function Reports() {
   // the individual report buttons and for "Full Business Report", which just runs all of them.
   const reportBuilders = {
     'Revenue Report': async (r) => {
-      const { data } = await supabase.from('orders').select('*, order_items(*)').gte('created_at', r.fromUtc).lt('created_at', r.toUtc).order('created_at', { ascending: false });
+      const { data } = await supabase
+        .from('orders')
+        .select('id, created_at, customer_name, table_no, status, payment_method, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, tax_rate_percent, order_items(id, price, quantity, status)')
+        .gte('created_at', r.fromUtc)
+        .lt('created_at', r.toUtc)
+        .order('created_at', { ascending: false });
       const rows = (data || [])
         .filter(isRevenueOrder)
         .map(o => {
@@ -83,7 +88,12 @@ export default function Reports() {
       return { filename: 'Revenue_Report', headers: ['Date', 'Order ID', 'Customer', 'Table', 'Status', 'Amount', 'Payment Method'], rows };
     },
     'Expense Report': async (r) => {
-      const { data } = await supabase.from('expenses').select('*').gte('date', r.fromUtc).lt('date', r.toUtc).order('date', { ascending: false });
+      const { data } = await supabase
+        .from('expenses')
+        .select('date, description, category, amount, payment_method, vendor')
+        .gte('date', r.fromUtc)
+        .lt('date', r.toUtc)
+        .order('date', { ascending: false });
       const rows = (data || []).map(e => [format(new Date(e.date), 'yyyy-MM-dd'), e.description, e.category, e.amount, e.payment_method || '-', e.vendor || '-']);
       return { filename: 'Expense_Report', headers: ['Date', 'Title', 'Category', 'Amount', 'Payment Method', 'Vendor'], rows };
     },
@@ -98,22 +108,36 @@ export default function Reports() {
       ]
     }),
     'Inventory Report': async () => {
-      const { data } = await supabase.from('inventory').select('*').order('name');
+      const { data } = await supabase
+        .from('inventory')
+        .select('name, category, quantity, unit, min_stock, cost_price, selling_price, supplier')
+        .order('name');
       const rows = (data || []).map(i => [i.name, i.category, i.quantity, i.unit, i.min_stock, i.cost_price, i.selling_price, i.supplier || '-']);
       return { filename: 'Inventory_Report', headers: ['Item', 'Category', 'Stock Qty', 'Unit', 'Min Stock', 'Cost Price', 'Selling Price', 'Supplier'], rows };
     },
     'Employee Report': async () => {
-      const { data } = await supabase.from('employees').select('*').order('full_name');
+      const { data } = await supabase
+        .from('employees')
+        .select('full_name, position, phone, joining_date, monthly_salary, status')
+        .order('full_name');
       const rows = (data || []).map(e => [e.full_name, e.position, e.phone || '-', e.joining_date ? format(new Date(e.joining_date), 'yyyy-MM-dd') : '-', e.monthly_salary, e.status]);
       return { filename: 'Employee_Report', headers: ['Name', 'Position', 'Phone', 'Joining Date', 'Monthly Salary', 'Status'], rows };
     },
     'Salary Report': async (r) => {
-      const { data } = await supabase.from('salaries').select('*, employees(full_name, position)').gte('payment_date', r.fromUtc).lt('payment_date', r.toUtc).order('payment_date', { ascending: false });
+      const { data } = await supabase
+        .from('salaries')
+        .select('payment_date, month, year, amount, status, remarks, employees(full_name, position)')
+        .gte('payment_date', r.fromUtc)
+        .lt('payment_date', r.toUtc)
+        .order('payment_date', { ascending: false });
       const rows = (data || []).map(s => [s.payment_date ? format(new Date(s.payment_date), 'yyyy-MM-dd') : '-', s.employees?.full_name || 'Unknown', s.employees?.position || '-', s.month, s.year, s.amount, s.status, s.remarks || '-']);
       return { filename: 'Salary_Report', headers: ['Date', 'Employee', 'Position', 'Month', 'Year', 'Amount', 'Status', 'Remarks'], rows };
     },
     'Vendor Report': async () => {
-      const { data } = await supabase.from('vendors').select('*').order('name');
+      const { data } = await supabase
+        .from('vendors')
+        .select('name, contact_person, phone, email, products, outstanding_amount')
+        .order('name');
       const rows = (data || []).map(v => [v.name, v.contact_person || '-', v.phone || '-', v.email || '-', v.products || '-', v.outstanding_amount || 0]);
       return { filename: 'Vendor_Report', headers: ['Name', 'Contact Person', 'Phone', 'Email', 'Products', 'Outstanding Amount'], rows };
     }

@@ -10,20 +10,27 @@ export default function Customers() {
   const fetchCustomers = useCallback(async () => {
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
+      .select('id, name, phone, points, visits, total_spent, last_visit, created_at')
       .order('points', { ascending: false });
     if (!error) setCustomers(data || []);
   }, []);
 
   useEffect(() => {
     fetchCustomers();
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchCustomers, 3000);
+    };
 
     const sub = supabase
       .channel('customers_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, fetchCustomers)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(sub);
     };
   }, [fetchCustomers]);

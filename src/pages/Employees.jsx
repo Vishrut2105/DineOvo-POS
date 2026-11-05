@@ -16,20 +16,27 @@ export default function Employees() {
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase
       .from('employees')
-      .select('*')
+      .select('id, full_name, position, phone, joining_date, monthly_salary, status')
       .order('full_name');
     if (!error) setEmployees(data || []);
   }, []);
 
   useEffect(() => {
     fetchEmployees();
+    let debounceTimer = null;
+    const debouncedFetch = () => {
+      if (document.hidden) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchEmployees, 3000);
+    };
 
     const sub = supabase
       .channel('employees_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, fetchEmployees)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(sub);
     };
   }, [fetchEmployees]);

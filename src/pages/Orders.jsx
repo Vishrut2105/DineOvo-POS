@@ -217,7 +217,7 @@ export default function Orders({ orders, requests = [], menuItems, inventory = [
     if (showSpinner) setIsLoadingCustom(true);
     const { data } = await supabase
       .from('orders')
-      .select('*, order_items (*)')
+      .select('id, table_no, customer_name, mobile_no, status, notes, payment_method, paid_cash, paid_upi, paid_card, discount_type, discount_value, discount_amount, taxable_value, cgst_amount, sgst_amount, round_off, grand_total, order_number, invoice_number, created_at, inventory_deducted, order_items(id, order_id, item_id, quantity, custom_name, price, status, batch, created_at, prepared)')
       .gte('created_at', customRange.fromUtc)
       .lt('created_at', customRange.toUtc)
       .order('created_at', { ascending: false })
@@ -988,7 +988,7 @@ const OrderCard = React.memo(function OrderCard({ order, index, menuItemsMap, re
         const total = order.order_items?.filter(item => item.status !== 'cancelled').reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
         const earnedPoints = Math.floor(total / 10);
 
-        const { data: customer } = await withTimeout(supabase.from('customers').select('*').eq('phone', order.mobile_no).single());
+        const { data: customer } = await withTimeout(supabase.from('customers').select('id, points, visits, total_spent').eq('phone', order.mobile_no).single());
         if (customer) {
           await supabase.from('customers').update({
             points: customer.points + earnedPoints,
@@ -1575,7 +1575,7 @@ export function OrderModal({ order, menuItems, tables = [], onClose, onSave }) {
     if (String(mobileNo).length === 10 && !isEdit) {
       const checkCustomer = async () => {
         setCustomerLookupLoading(true);
-        const { data } = await supabase.from('customers').select('*').eq('phone', mobileNo).single();
+        const { data } = await supabase.from('customers').select('name, points').eq('phone', mobileNo).single();
         if (data) {
           if (!customerName) setCustomerName(data.name);
           setCustomerPoints(data.points);

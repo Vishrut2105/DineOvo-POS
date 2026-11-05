@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { supabase } from './lib/supabase';
 import { loadAppSettings } from './lib/appSettings';
+import { mergeLocalAndCloudOrders, patchOrderUpdate, patchOrderItem } from './lib/orderPatching';
+import { logSupabaseRead } from './lib/egressLogger';
 import {
   markSignOutReason,
   isSignOutPending,
@@ -371,7 +373,7 @@ function App() {
 
     const orderSubscription = supabase
       .channel('orders_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async (payload) => {
         if (payload.eventType === 'INSERT') {
           // KDS chime event (for Orders page sound toggle)
           window.dispatchEvent(new CustomEvent('new_data_chime'));
@@ -389,6 +391,30 @@ function App() {
             batch: 1,
             notifType: 'order',
           });
+
+          // Fetch ONLY this single new order with its line items (~1 KB instead of ~500 KB)
+          try {
+            const { data: newOrder } = await supabase
+              .from('orders')
+              .select(ORDER_COLUMNS)
+              .eq('id', payload.new.id)
+              .maybeSingle();
+
+            if (newOrder) {
+              logSupabaseRead('orders', 'single INSERT row fetch', newOrder);
+              setOrders(prev => {
+                if (prev.some(o => o.id === newOrder.id)) {
+                  return prev.map(o => o.id === newOrder.id ? newOrder : o);
+                }
+                return [newOrder, ...prev];
+              });
+              return;
+            }
+          } catch (err) {
+            console.error('Error fetching single order, falling back to debounced sync:', err);
+          }
+          fetchOrdersDebounced();
+
         } else if (payload.eventType === 'UPDATE') {
           if (payload.new?.status === 'cancelled') {
             window.dispatchEvent(new CustomEvent('new_data_chime'));
@@ -400,8 +426,17 @@ function App() {
               duration: 8000
             });
           }
+          // Patch updated row into state directly without refetching tables (0 egress)
+          if (payload.new) {
+            setOrders(prev => patchOrderUpdate(prev, payload.new));
+          }
+
+        } else if (payload.eventType === 'DELETE') {
+          // Remove deleted order from state directly (0 egress)
+          if (payload.old?.id) {
+            setOrders(prev => prev.filter(o => o.id !== payload.old.id));
+          }
         }
-        fetchOrdersDebounced();
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_items' }, (payload) => {
         if (payload.new?.batch > 1) {
@@ -418,25 +453,45 @@ function App() {
              notifType: 'order',
            });
         }
-        fetchOrdersDebounced();
+        // Patch new item into the parent order in state directly (0 egress)
+        if (payload.new) {
+          setOrders(prev => patchOrderItem(prev, payload.new, 'INSERT'));
+        }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, (payload) => {
-        if (payload.eventType !== 'INSERT') fetchOrdersDebounced();
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, (payload) => {
+        // Patch updated item (e.g. prepared toggle) in state directly (0 egress)
+        if (payload.new) {
+          setOrders(prev => patchOrderItem(prev, payload.new, 'UPDATE'));
+        }
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'order_items' }, (payload) => {
+        // Remove deleted item from order in state directly (0 egress)
+        if (payload.old) {
+          setOrders(prev => patchOrderItem(prev, payload.old, 'DELETE'));
+        }
       })
       .subscribe();
 
     const menuSubscription = supabase
       .channel('menu_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, fetchMenuItems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setMenuItems(prev => [...prev.filter(m => m.id !== payload.new.id), payload.new].sort((a,b) => a.name.localeCompare(b.name)));
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          setMenuItems(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setMenuItems(prev => prev.filter(m => m.id !== payload.old.id));
+        }
+      })
       .subscribe();
 
     const requestSubscription = supabase
       .channel('requests_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
+        if (payload.eventType === 'INSERT' && payload.new) {
           window.dispatchEvent(new CustomEvent('new_data_chime'));
           // Universal floating notification for customer requests
-          const reqType = payload.new?.type || 'request';
+          const reqType = payload.new.type || 'request';
           const requestLabels = {
             waiter: 'Waiter Requested',
             clean: 'Table Cleaning Request',
@@ -446,8 +501,8 @@ function App() {
           const isWater = reqType.startsWith('water');
           const isReview = reqType.toLowerCase().startsWith('review');
           pushNotification({
-            dedupId: payload.new?.id,
-            table_name: payload.new?.table_no || null,
+            dedupId: payload.new.id,
+            table_name: payload.new.table_no || null,
             order_type: 'request',
             item_count: null,
             isReorder: false,
@@ -460,24 +515,76 @@ function App() {
               ? 'Customer Review Received'
               : (requestLabels[reqType] || 'Customer Request'),
           });
+          setRequests(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)]);
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          setRequests(prev => prev.map(r => r.id === payload.new.id ? { ...r, ...payload.new } : r));
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setRequests(prev => prev.filter(r => r.id !== payload.old.id));
         }
-        fetchRequests();
       })
       .subscribe();
 
     const inventorySubscription = supabase
       .channel('inventory_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, fetchInventory)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, (payload) => {
+        const lowStockAlertsEnabled = localStorage.getItem('dineovo_low_stock_alerts') !== 'false';
+        if (payload.eventType === 'UPDATE' && lowStockAlertsEnabled && payload.new) {
+          const item = payload.new;
+          const prevItem = prevInventoryRef.current?.find(i => i.id === item.id);
+          if (prevItem) {
+            if (prevItem.quantity > prevItem.min_stock && item.quantity <= item.min_stock && item.quantity > 0) {
+              toast(`Low Stock Alert: ${item.name} is running low!`, { icon: '⚠️', style: { color: '#eab308' } });
+            } else if (prevItem.quantity > 0 && item.quantity <= 0) {
+              toast.error(`Out of Stock: ${item.name} is completely out of stock!`);
+            }
+          }
+        }
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setInventory(prev => {
+            const next = [...prev.filter(i => i.id !== payload.new.id), payload.new].sort((a,b) => a.name.localeCompare(b.name));
+            prevInventoryRef.current = next;
+            return next;
+          });
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          setInventory(prev => {
+            const next = prev.map(i => i.id === payload.new.id ? { ...i, ...payload.new } : i);
+            prevInventoryRef.current = next;
+            return next;
+          });
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setInventory(prev => {
+            const next = prev.filter(i => i.id !== payload.old.id);
+            prevInventoryRef.current = next;
+            return next;
+          });
+        }
+      })
       .subscribe();
 
     const tablesSubscription = supabase
       .channel('tables_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, fetchTables)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setTables(prev => [...prev.filter(t => t.id !== payload.new.id), payload.new]);
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          setTables(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t));
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setTables(prev => prev.filter(t => t.id !== payload.old.id));
+        }
+      })
       .subscribe();
 
     const reservationsSubscription = supabase
       .channel('app_reservations_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, fetchReservations)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setReservations(prev => [...prev.filter(r => r.id !== payload.new.id), payload.new]);
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          setReservations(prev => prev.map(r => r.id === payload.new.id ? { ...r, ...payload.new } : r));
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setReservations(prev => prev.filter(r => r.id !== payload.old.id));
+        }
+      })
       .subscribe();
 
     // ─── Session Security: Realtime force-logout listener ───
@@ -518,15 +625,32 @@ function App() {
       }
     }, 120000);
 
-    // Poll local server for offline orders every 5 seconds (skip when tab is hidden)
+    // Poll local SQLite server for offline orders every 5 seconds (zero Supabase cloud egress).
+    // Skips when tab is hidden.
     const localPollInterval = setInterval(() => {
-      if (!document.hidden) fetchOrders();
+      if (!document.hidden) fetchLocalOrders();
     }, 5000);
+
+    // Cloud resync when window regains focus after being hidden > 5 minutes
+    const handleVisibilityChange = () => {
+      if (!document.hidden && Date.now() - lastSupabaseSyncRef.current > 300000) {
+        fetchOrders();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cloud resync when network connectivity returns
+    const handleOnline = () => {
+      fetchOrders();
+    };
+    window.addEventListener('online', handleOnline);
 
     return () => {
       clearTimeout(fetchOrdersDebounceRef.current);
       clearInterval(localPollInterval);
       clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
       supabase.removeChannel(orderSubscription);
       supabase.removeChannel(menuSubscription);
       supabase.removeChannel(requestSubscription);
@@ -538,7 +662,7 @@ function App() {
       supabase.removeChannel(sessionSubscription);
       authSubscription.unsubscribe();
     };
-  }, []);
+  }, [fetchLocalOrders, fetchOrders, fetchOrdersDebounced, fetchRequests, fetchMenuItems, fetchInventory, fetchTables, fetchReservations, fetchAdminProfile, fetchSubscription]);
 
   // Auto Updater — only show notification AFTER user is logged in.
   // Depends on `!!session`, not `session` itself: Supabase hands out a new session object
@@ -623,86 +747,99 @@ function App() {
   }, [isLoggedIn]);
 
 
-  const fetchOrders = useCallback(() => {
-    const sevenDaysAgo = subDays(new Date(), 7).toISOString();
+  // Explicit column list for orders & order_items to avoid downloading unused metadata.
+  const ORDER_COLUMNS = 'id, table_no, customer_name, mobile_no, status, notes, payment_method, paid_cash, paid_upi, paid_card, discount_type, discount_value, discount_amount, taxable_value, cgst_amount, sgst_amount, round_off, grand_total, order_number, invoice_number, created_at, inventory_deducted, order_items(id, order_id, item_id, quantity, custom_name, price, status, batch, created_at, prepared)';
+
+  const lastSupabaseSyncRef = useRef(Date.now());
+
+  // 1. Fetch from Local Express/SQLite server ONLY (Free, 0 Supabase cloud egress)
+  const fetchLocalOrders = useCallback(async () => {
+    if (!window.LOCAL_API_KEY) return;
     const host = window.location.hostname || 'localhost';
-
-    // 1. Fetch from Local Server Immediately (Instant UI Update)
-    if (window.LOCAL_API_KEY) {
-      fetch(`http://${host}:3000/api/orders`, {
+    try {
+      const res = await fetch(`http://${host}:3000/api/orders`, {
         headers: { 'x-api-key': window.LOCAL_API_KEY }
-      })
-      .then(res => res.ok ? res.json() : [])
-      .then(localOrders => {
-        if (localOrders && localOrders.length > 0) {
-          // Use local orders as the base set — they reflect deletes
-          setOrders(prevOrders => {
-            const orderMap = new Map(localOrders.map(o => [o.id, o]));
-            // Layer any Supabase-only orders that local doesn't have yet
-            for (const prev of prevOrders) {
-              if (!orderMap.has(prev.id)) {
-                // Only keep if it wasn't from local (i.e. Supabase-only data)
-                // We tag local orders below, but safer to just skip
-              }
-            }
-            return [...orderMap.values()].sort(
-              (a, b) => new Date(b.created_at) - new Date(a.created_at)
-            );
-          });
-        }
-      })
-      .catch(() => console.log('Local fetch error'));
+      });
+      if (!res.ok) return;
+      const localOrders = await res.json();
+      if (Array.isArray(localOrders) && localOrders.length > 0) {
+        setOrders(prevOrders => mergeLocalAndCloudOrders(prevOrders, localOrders));
+      }
+    } catch {
+      // Local server down or offline, silent fail
     }
-
-    // 2. Fetch from Supabase in background (Sync Cloud Data)
-    supabase
-      .from('orders')
-      .select('*, order_items (*)')
-      .gte('created_at', sevenDaysAgo)
-      .order('created_at', { ascending: false })
-      // Without an explicit order on the nested items, Postgres returns them in physical
-      // row order — so ticking an item's "prepared" checkbox rewrote the row, moved it to
-      // the end, and the list visibly re-shuffled under the user's finger.
-      .order('created_at', { referencedTable: 'order_items', ascending: true })
-      .order('id', { referencedTable: 'order_items', ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          // Supabase is the source of truth — full replace
-          setOrders(data);
-        }
-      })
-      .catch(() => console.log('Offline: Could not reach Supabase'));
   }, []);
 
-  // Order INSERT + its order_items INSERT fire as separate realtime events within
-  // milliseconds of each other — debounce the resulting fetchOrders() calls so a
-  // single new order doesn't trigger several redundant fetches back to back.
+  // 2. Full Cloud Resync (Runs on startup, user login, reconnect, or focus after idle >5m)
+  const fetchOrders = useCallback(async () => {
+    // Check local server first for instant offline order availability
+    await fetchLocalOrders();
+
+    const sevenDaysAgo = subDays(new Date(), 7).toISOString();
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(ORDER_COLUMNS)
+        .gte('created_at', sevenDaysAgo)
+        .order('created_at', { ascending: false })
+        .order('created_at', { referencedTable: 'order_items', ascending: true })
+        .order('id', { referencedTable: 'order_items', ascending: true });
+
+      if (!error && data) {
+        logSupabaseRead('orders', 'fetchOrders (7d cloud sync)', data);
+        lastSupabaseSyncRef.current = Date.now();
+        // Merge so any local-only offline orders aren't overwritten
+        setOrders(prev => {
+          const unsyncedLocal = prev.filter(p => p.synced === 0);
+          if (unsyncedLocal.length > 0) {
+            return mergeLocalAndCloudOrders(data, unsyncedLocal);
+          }
+          return data;
+        });
+      }
+    } catch {
+      console.log('Offline: Could not reach Supabase');
+    }
+  }, [fetchLocalOrders]);
+
+  // Fallback debounced refetch: debounced to 2500ms to avoid burst requests
   const fetchOrdersDebounceRef = useRef(null);
   const fetchOrdersDebounced = useCallback(() => {
     clearTimeout(fetchOrdersDebounceRef.current);
-    fetchOrdersDebounceRef.current = setTimeout(fetchOrders, 300);
+    fetchOrdersDebounceRef.current = setTimeout(fetchOrders, 2500);
   }, [fetchOrders]);
 
   const fetchRequests = useCallback(async () => {
     const sevenDaysAgo = subDays(new Date(), 7).toISOString();
     const { data, error } = await supabase
       .from('requests')
-      .select('*')
+      .select('id, type, table_no, status, created_at')
       .gte('created_at', sevenDaysAgo)
       .order('created_at', { ascending: false });
-    if (!error) setRequests(data || []);
+    if (!error && data) {
+      logSupabaseRead('requests', 'fetchRequests', data);
+      setRequests(data);
+    }
   }, []);
 
   const fetchMenuItems = useCallback(async () => {
-    const { data, error } = await supabase.from('menu_items').select('*').order('name');
-    if (!error) setMenuItems(data || []);
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('id, name, price, category, status, is_veg, description')
+      .order('name');
+    if (!error && data) {
+      logSupabaseRead('menu_items', 'fetchMenuItems', data);
+      setMenuItems(data);
+    }
   }, []);
 
   const fetchInventory = useCallback(async () => {
-    const { data, error } = await supabase.from('inventory').select('*').order('name');
-    if (!error) {
-      // Settings > Notifications > "Low Inventory Alerts" toggle gates these — previously
-      // that toggle was uncontrolled decoration and had no effect on this code at all.
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('id, name, category, quantity, unit, min_stock, cost_price, selling_price, supplier')
+      .order('name');
+    if (!error && data) {
+      logSupabaseRead('inventory', 'fetchInventory', data);
       const lowStockAlertsEnabled = localStorage.getItem('dineovo_low_stock_alerts') !== 'false';
       if (prevInventoryRef.current && lowStockAlertsEnabled) {
         data.forEach(item => {
@@ -717,28 +854,40 @@ function App() {
         });
       }
       prevInventoryRef.current = data;
-      setInventory(data || []);
+      setInventory(data);
     }
   }, []);
 
   const fetchTables = useCallback(async () => {
-    const { data, error } = await supabase.from('tables').select('*');
-    if (!error) setTables(data || []);
+    const { data, error } = await supabase.from('tables').select('id, table_no, capacity, status, floor, qr_code');
+    if (!error && data) {
+      logSupabaseRead('tables', 'fetchTables', data);
+      setTables(data);
+    }
   }, []);
 
   const fetchReservations = useCallback(async () => {
-    const { data, error } = await supabase.from('reservations').select('*');
-    if (!error) setReservations(data || []);
+    const { data, error } = await supabase.from('reservations').select('id, customer_name, phone, guest_count, reservation_date, reservation_time, table_no, status, notes');
+    if (!error && data) {
+      logSupabaseRead('reservations', 'fetchReservations', data);
+      setReservations(data);
+    }
   }, []);
 
   const fetchAdminProfile = useCallback(async () => {
-    const { data, error } = await supabase.from('admin_profile').select('*').eq('id', 1).maybeSingle();
-    if (!error) setAdminProfile(data);
+    const { data, error } = await supabase.from('admin_profile').select('id, name, avatar_url, updated_at').eq('id', 1).maybeSingle();
+    if (!error && data) {
+      logSupabaseRead('admin_profile', 'fetchAdminProfile', data);
+      setAdminProfile(data);
+    }
   }, []);
 
   const fetchSubscription = useCallback(async () => {
     const { data, error } = await supabase.from('subscription_status').select('expiry_date').eq('id', 1).maybeSingle();
-    if (!error && data) setExpiryDate(data.expiry_date);
+    if (!error && data) {
+      logSupabaseRead('subscription_status', 'fetchSubscription', data);
+      setExpiryDate(data.expiry_date);
+    }
   }, []);
 
   // The mount effect (way above) only runs once per app launch, not on every login/logout

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { orderRevenue, isRevenueOrder } from '../lib/orderTotals';
 import { billRow, groupByBusinessDay, PAYMENT_METHODS, UNPAID } from '../lib/dayReport';
@@ -8,6 +8,7 @@ import { businessDayStartUtc, todayBusinessDay } from '../lib/businessDay';
 import { getTaxRatePercent } from '../lib/appSettings';
 import { Search, Download, DollarSign, Calendar, Trophy, ChevronDown, Receipt, CalendarDays, List } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth, parseISO } from 'date-fns';
+import { logSupabaseRead } from '../lib/egressLogger';
 
 // The three ways an owner asks about takings, and the view each one needs:
 //   Bills    — "what did table 4 pay on Friday?"       → one row per bill, openable
@@ -32,51 +33,74 @@ export default function Revenue() {
   const [paymentFilter, setPaymentFilter] = useState('All Payments');
   const [selectedBill, setSelectedBill] = useState(null);
 
-  const fetchData = async () => {
+  const debounceRef = useRef(null);
+
+  const fetchOrdersData = useCallback(async () => {
     // Bounded by the picked range, widened to cover the fixed Today/Week/Month cards.
-    // This page previously fetched the ENTIRE orders table with no filter at all, which
-    // would have grown unbounded as trade accumulated.
     const monthStart = businessDayStartUtc(`${todayBusinessDay().slice(0, 7)}-01`).toISOString();
     const windowStart = range.fromUtc < monthStart ? range.fromUtc : monthStart;
 
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('id, created_at, customer_name, table_no, status, notes, order_number, invoice_number, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, payment_method, tax_rate_percent, order_items(id, order_id, item_id, custom_name, quantity, price, status, batch, created_at)')
       .gte('created_at', windowStart);
-      
+
+    if (ordersData) {
+      logSupabaseRead('orders', 'Revenue fetchOrdersData', ordersData);
+      setOrders(ordersData);
+    }
+    setLoading(false);
+  }, [range.fromUtc]);
+
+  const fetchMenuOnce = useCallback(async () => {
     const { data: menuData } = await supabase
       .from('menu_items')
-      .select('*');
+      .select('id, name');
+    if (menuData) {
+      logSupabaseRead('menu_items', 'Revenue fetchMenuOnce', menuData);
+      setMenuItems(menuData);
+    }
+  }, []);
 
-    if (ordersData) setOrders(ordersData);
-    if (menuData) setMenuItems(menuData);
-    
-    setLoading(false);
-  };
+  const debouncedFetchOrders = useCallback(() => {
+    if (document.hidden) return;
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchOrdersData();
+    }, 3000);
+  }, [fetchOrdersData]);
 
   useEffect(() => {
-    fetchData();
+    fetchOrdersData();
+    fetchMenuOnce();
 
     const ordersSub = supabase
       .channel('revenue_orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, debouncedFetchOrders)
       .subscribe();
       
     const orderItemsSub = supabase
       .channel('revenue_order_items')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, debouncedFetchOrders)
       .subscribe();
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) debouncedFetchOrders();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      clearTimeout(debounceRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(ordersSub);
       supabase.removeChannel(orderItemsSub);
     };
-  }, []);
+  }, [fetchOrdersData, fetchMenuOnce, debouncedFetchOrders]);
 
   // Separate from the subscription effect so changing the date doesn't re-open channels.
   useEffect(() => {
-    fetchData();
-  }, [range.fromUtc, range.toUtc]);
+    fetchOrdersData();
+  }, [range.fromUtc, range.toUtc, fetchOrdersData]);
 
   // --- Metrics Calculation ---
   // `endDate` is exclusive and optional — the fixed cards pass only a start, the range

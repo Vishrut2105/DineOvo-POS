@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { orderRevenue, orderLostRevenue, isRevenueOrder } from '../lib/orderTotals';
 import { getTaxRatePercent } from '../lib/appSettings';
+import { logSupabaseRead } from '../lib/egressLogger';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { DollarSign, CreditCard, ShoppingCart, TrendingUp, TrendingDown, Wallet, Sun, Moon, Sunrise, Sunset } from 'lucide-react';
 import { format, subDays, startOfDay, startOfWeek, startOfMonth, isAfter, isBefore } from 'date-fns';
@@ -23,72 +24,97 @@ export default function Dashboard() {
   // owner picks something else.
   const [range, setRange] = useState(() => presetRange('today'));
 
-  useEffect(() => {
-    fetchData();
+  const debounceRef = useRef(null);
 
-    const ordersSub = supabase
-      .channel('dashboard_orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchData)
-      .subscribe();
-      
-    const orderItemsSub = supabase
-      .channel('dashboard_order_items')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchData)
-      .subscribe();
-
-    const expensesSub = supabase
-      .channel('dashboard_expenses')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchData)
-      .subscribe();
-
-    const inventorySub = supabase
-      .channel('dashboard_inventory')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, fetchData)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ordersSub);
-      supabase.removeChannel(orderItemsSub);
-      supabase.removeChannel(expensesSub);
-      supabase.removeChannel(inventorySub);
-    };
-  }, []);
-
-  // Refetch when the picked range changes. Kept separate from the subscription effect
-  // above so changing the date doesn't tear down and re-open four realtime channels.
-  useEffect(() => {
-    fetchData();
-  }, [range.fromUtc, range.toUtc]);
-
-  const fetchData = async () => {
+  const fetchOrdersAndExpenses = useCallback(async () => {
     // The window must cover BOTH the range the user picked and the fixed This Week /
     // This Month blocks below, otherwise those blocks would silently read from data
     // that was never fetched and show too-low numbers.
     const monthStart = businessDayStartUtc(`${todayBusinessDay().slice(0, 7)}-01`).toISOString();
     const windowStart = range.fromUtc < monthStart ? range.fromUtc : monthStart;
 
-    // Fetch all orders with their items
+    // Fetch orders with needed columns only
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('id, created_at, status, grand_total, discount_amount, discount_type, discount_value, taxable_value, cgst_amount, sgst_amount, round_off, paid_cash, paid_upi, paid_card, payment_method, order_items(id, price, quantity, status)')
       .gte('created_at', windowStart);
 
-    // Fetch all expenses
+    // Fetch expenses with needed columns only
     const { data: expensesData } = await supabase
       .from('expenses')
-      .select('*')
+      .select('id, amount, date, category')
       .gte('date', windowStart);
 
-    // Fetch inventory
-    const { data: inventoryData } = await supabase
-      .from('inventory')
-      .select('category');
-
-    if (ordersData) setOrders(ordersData);
-    if (expensesData) setExpenses(expensesData);
-    if (inventoryData) setInventory(inventoryData);
+    if (ordersData) {
+      logSupabaseRead('orders', 'Dashboard fetchOrdersAndExpenses', ordersData);
+      setOrders(ordersData);
+    }
+    if (expensesData) {
+      logSupabaseRead('expenses', 'Dashboard fetchOrdersAndExpenses', expensesData);
+      setExpenses(expensesData);
+    }
     setLoading(false);
-  };
+  }, [range.fromUtc]);
+
+  const fetchInventoryCategories = useCallback(async () => {
+    const { data } = await supabase.from('inventory').select('category');
+    if (data) {
+      logSupabaseRead('inventory', 'Dashboard fetchInventoryCategories', data);
+      setInventory(data);
+    }
+  }, []);
+
+  const debouncedFetchData = useCallback(() => {
+    if (document.hidden) return;
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchOrdersAndExpenses();
+    }, 3000);
+  }, [fetchOrdersAndExpenses]);
+
+  useEffect(() => {
+    fetchOrdersAndExpenses();
+    fetchInventoryCategories();
+
+    const ordersSub = supabase
+      .channel('dashboard_orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, debouncedFetchData)
+      .subscribe();
+      
+    const orderItemsSub = supabase
+      .channel('dashboard_order_items')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, debouncedFetchData)
+      .subscribe();
+
+    const expensesSub = supabase
+      .channel('dashboard_expenses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, debouncedFetchData)
+      .subscribe();
+
+    const inventorySub = supabase
+      .channel('dashboard_inventory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, fetchInventoryCategories)
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) debouncedFetchData();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearTimeout(debounceRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(ordersSub);
+      supabase.removeChannel(orderItemsSub);
+      supabase.removeChannel(expensesSub);
+      supabase.removeChannel(inventorySub);
+    };
+  }, [fetchOrdersAndExpenses, fetchInventoryCategories, debouncedFetchData]);
+
+  // Refetch when the picked range changes
+  useEffect(() => {
+    fetchOrdersAndExpenses();
+  }, [range.fromUtc, range.toUtc, fetchOrdersAndExpenses]);
 
   // --- Helper to calculate metrics for a given date range ---
   // `endDate` is exclusive and optional: the fixed Week/Month blocks pass only a start

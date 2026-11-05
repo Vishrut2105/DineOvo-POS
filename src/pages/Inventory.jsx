@@ -24,7 +24,7 @@ export default function Inventory() {
   const fetchInventory = useCallback(async () => {
     const { data, error } = await supabase
       .from('inventory')
-      .select('*')
+      .select('id, name, category, quantity, unit, min_stock, cost_price, selling_price, supplier, notes, created_at')
       .order('name');
     if (!error) setInventory(data || []);
   }, []);
