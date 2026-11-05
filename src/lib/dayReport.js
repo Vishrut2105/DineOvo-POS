@@ -100,8 +100,8 @@ export function billRow(order = {}, fallbackTaxRatePercent = 0) {
     id: order.id,
     orderNumber: order.order_number ?? null,
     // Gap-free, assigned by trigger when the order is paid — see
-    // database_scripts/2026-09-12_invoice_number.sql. Null until then.
-    invoiceNumber: order.invoice_number ?? null,
+    // database_scripts/2026-09-12_invoice_number.sql. Falls back to order_number if not yet set.
+    invoiceNumber: order.invoice_number ?? order.order_number ?? null,
     createdAt: order.created_at,
     businessDay: order.created_at ? businessDayOf(order.created_at) : null,
     customerName: order.customer_name || null,

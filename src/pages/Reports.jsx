@@ -74,7 +74,7 @@ export default function Reports() {
     'Revenue Report': async (r) => {
       const { data } = await supabase
         .from('orders')
-        .select('id, created_at, customer_name, table_no, status, payment_method, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, tax_rate_percent, order_items(id, price, quantity, status)')
+        .select('id, created_at, customer_name, table_no, status, payment_method, order_number, invoice_number, grand_total, taxable_value, cgst_amount, sgst_amount, discount_amount, discount_type, discount_value, round_off, paid_cash, paid_upi, paid_card, tax_rate_percent, order_items(id, price, quantity, status)')
         .gte('created_at', r.fromUtc)
         .lt('created_at', r.toUtc)
         .order('created_at', { ascending: false });
@@ -83,9 +83,37 @@ export default function Reports() {
         .map(o => {
           // Gross — the amount the customer actually paid, GST and discount included.
           const total = orderRevenue(o, getTaxRatePercent() ?? 0).gross;
-          return [format(new Date(o.created_at), 'yyyy-MM-dd HH:mm'), o.id, o.customer_name || 'Walk-in', o.table_no || '-', o.status, total, o.payment_method || '-'];
+
+          // Payment method: match reference spreadsheet format ("Cash", "UPI / Online", or "Split: Cash ₹X + UPI / Online ₹Y")
+          let paymentMethod = o.payment_method || '-';
+          const splitParts = [];
+          if (Number(o.paid_cash) > 0) splitParts.push(`Cash ₹${Number(o.paid_cash).toFixed(2)}`);
+          if (Number(o.paid_upi) > 0) splitParts.push(`UPI / Online ₹${Number(o.paid_upi).toFixed(2)}`);
+          if (Number(o.paid_card) > 0) splitParts.push(`Card ₹${Number(o.paid_card).toFixed(2)}`);
+          if (splitParts.length > 1) {
+            paymentMethod = 'Split: ' + splitParts.join(' + ');
+          } else if (splitParts.length === 1) {
+            paymentMethod = splitParts[0].split(' ₹')[0];
+          }
+
+          const invoice = o.invoice_number ?? o.order_number ?? '';
+
+          return [
+            format(new Date(o.created_at), 'dd/MM/yyyy HH:mm'),
+            o.id,
+            o.customer_name || 'Walk-in',
+            o.table_no ? `T${o.table_no}` : '-',
+            o.status,
+            total,
+            paymentMethod,
+            invoice
+          ];
         });
-      return { filename: 'Revenue_Report', headers: ['Date', 'Order ID', 'Customer', 'Table', 'Status', 'Amount', 'Payment Method'], rows };
+      return {
+        filename: 'Revenue_Report',
+        headers: ['Date', 'Order ID', 'Customer', 'Table', 'Status', 'Amount', 'Payment Method', 'Invoice'],
+        rows
+      };
     },
     'Expense Report': async (r) => {
       const { data } = await supabase

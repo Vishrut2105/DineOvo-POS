@@ -273,7 +273,7 @@ export default function Revenue() {
         r.status,
         r.finalAmount,
         formatPaymentMethod(r),
-        r.invoiceNumber ?? '',
+        r.invoiceNumber ?? r.orderNumber ?? '',
       ]),
     }),
     days: () => ({
