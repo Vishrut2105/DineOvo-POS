@@ -46,7 +46,7 @@ export default function Expenses() {
     const { fromUtc, toUtc } = rangeRef.current;
     const { data } = await supabase
       .from('expenses')
-      .select('id, description, amount, category, date, payment_method, vendor, notes')
+      .select('*')
       .gte('date', fromUtc).lt('date', toUtc)
       .order('date', { ascending: false });
     if (data) setExpenses(data);

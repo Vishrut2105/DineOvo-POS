@@ -825,7 +825,7 @@ function App() {
   const fetchMenuItems = useCallback(async () => {
     const { data, error } = await supabase
       .from('menu_items')
-      .select('id, name, price, category, status, is_veg, description')
+      .select('*')
       .order('name');
     if (!error && data) {
       logSupabaseRead('menu_items', 'fetchMenuItems', data);
@@ -859,7 +859,7 @@ function App() {
   }, []);
 
   const fetchTables = useCallback(async () => {
-    const { data, error } = await supabase.from('tables').select('id, table_no, capacity, status, floor, qr_code');
+    const { data, error } = await supabase.from('tables').select('*');
     if (!error && data) {
       logSupabaseRead('tables', 'fetchTables', data);
       setTables(data);
@@ -867,7 +867,7 @@ function App() {
   }, []);
 
   const fetchReservations = useCallback(async () => {
-    const { data, error } = await supabase.from('reservations').select('id, customer_name, phone, guest_count, reservation_date, reservation_time, table_no, status, notes');
+    const { data, error } = await supabase.from('reservations').select('*');
     if (!error && data) {
       logSupabaseRead('reservations', 'fetchReservations', data);
       setReservations(data);

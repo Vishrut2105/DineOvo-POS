@@ -10,7 +10,7 @@ export default function Customers() {
   const fetchCustomers = useCallback(async () => {
     const { data, error } = await supabase
       .from('customers')
-      .select('id, name, phone, points, visits, total_spent, last_visit, created_at')
+      .select('*')
       .order('points', { ascending: false });
     if (!error) setCustomers(data || []);
   }, []);

@@ -16,7 +16,7 @@ export default function Employees() {
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, full_name, position, phone, joining_date, monthly_salary, status')
+      .select('*')
       .order('full_name');
     if (!error) setEmployees(data || []);
   }, []);

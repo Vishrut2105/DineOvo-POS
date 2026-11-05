@@ -13,7 +13,7 @@ export default function Reservations({ tables }) {
   const fetchReservations = useCallback(async () => {
     const { data, error } = await supabase
       .from('reservations')
-      .select('id, customer_name, phone, guest_count, reservation_date, reservation_time, table_no, status, notes')
+      .select('*')
       .order('reservation_date', { ascending: true })
       .order('reservation_time', { ascending: true });
     if (!error) setReservations(data || []);
