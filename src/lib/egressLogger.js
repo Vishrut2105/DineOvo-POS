@@ -23,3 +23,4 @@ export function logSupabaseRead(table, action, data) {
 
   console.log(`[Egress Monitor] ${table} (${action}): ~${kb} KB | Last min: ~${totalKb} KB`);
 }
+

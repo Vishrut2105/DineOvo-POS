@@ -57,3 +57,4 @@ test('patchOrderItem handles INSERT and UPDATE correctly', () => {
   assert.equal(deleted[0].order_items.length, 1);
   assert.equal(deleted[0].order_items[0].id, 'item-1');
 });
+

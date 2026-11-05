@@ -41,3 +41,4 @@ To ensure the restaurant can run all day across multiple PC terminals without ev
 ### 6. Keep Media in Storage, Not Table Columns
 - Never store base64 or binary data in Postgres columns.
 - Store media in Supabase Storage buckets (`avatars`, `restaurant-assets`) and store only the public URL in table columns.
+

@@ -662,7 +662,7 @@ function App() {
       supabase.removeChannel(sessionSubscription);
       authSubscription.unsubscribe();
     };
-  }, [fetchLocalOrders, fetchOrders, fetchOrdersDebounced, fetchRequests, fetchMenuItems, fetchInventory, fetchTables, fetchReservations, fetchAdminProfile, fetchSubscription]);
+  }, []);
 
   // Auto Updater — only show notification AFTER user is logged in.
   // Depends on `!!session`, not `session` itself: Supabase hands out a new session object
