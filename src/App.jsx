@@ -330,12 +330,26 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       sessionRef.current = session;
       setSession(session);
-      if (session) ensureSessionRegistered(session);
+      if (session) {
+        ensureSessionRegistered(session);
+        fetchMenuItems();
+        fetchOrders();
+        fetchInventory();
+        fetchTables();
+        fetchReservations();
+      }
     });
 
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'SIGNED_IN') {
+        fetchMenuItems();
+        fetchOrders();
+        fetchInventory();
+        fetchTables();
+        fetchReservations();
+      }
       if (_event === 'SIGNED_OUT') {
         // Report the actual cause rather than inferring it. A null reason means nothing
         // local initiated this sign-out, so the session died on its own — a token refresh
@@ -785,6 +799,7 @@ function App() {
         .order('created_at', { referencedTable: 'order_items', ascending: true })
         .order('id', { referencedTable: 'order_items', ascending: true });
 
+      if (error) console.error('fetchOrders error:', error);
       if (!error && data) {
         logSupabaseRead('orders', 'fetchOrders (7d cloud sync)', data);
         lastSupabaseSyncRef.current = Date.now();
@@ -816,6 +831,7 @@ function App() {
       .select('id, type, table_no, status, created_at')
       .gte('created_at', sevenDaysAgo)
       .order('created_at', { ascending: false });
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('requests', 'fetchRequests', data);
       setRequests(data);
@@ -827,6 +843,7 @@ function App() {
       .from('menu_items')
       .select('*')
       .order('name');
+    if (error) console.error('fetchMenuItems error:', error);
     if (!error && data) {
       logSupabaseRead('menu_items', 'fetchMenuItems', data);
       setMenuItems(data);
@@ -838,6 +855,7 @@ function App() {
       .from('inventory')
       .select('id, name, category, quantity, unit, min_stock, cost_price, selling_price, supplier')
       .order('name');
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('inventory', 'fetchInventory', data);
       const lowStockAlertsEnabled = localStorage.getItem('dineovo_low_stock_alerts') !== 'false';
@@ -860,6 +878,7 @@ function App() {
 
   const fetchTables = useCallback(async () => {
     const { data, error } = await supabase.from('tables').select('*');
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('tables', 'fetchTables', data);
       setTables(data);
@@ -868,6 +887,7 @@ function App() {
 
   const fetchReservations = useCallback(async () => {
     const { data, error } = await supabase.from('reservations').select('*');
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('reservations', 'fetchReservations', data);
       setReservations(data);
@@ -876,6 +896,7 @@ function App() {
 
   const fetchAdminProfile = useCallback(async () => {
     const { data, error } = await supabase.from('admin_profile').select('id, name, avatar_url, updated_at').eq('id', 1).maybeSingle();
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('admin_profile', 'fetchAdminProfile', data);
       setAdminProfile(data);
@@ -884,6 +905,7 @@ function App() {
 
   const fetchSubscription = useCallback(async () => {
     const { data, error } = await supabase.from('subscription_status').select('expiry_date').eq('id', 1).maybeSingle();
+    if (error) console.error('fetchRequests error:', error);
     if (!error && data) {
       logSupabaseRead('subscription_status', 'fetchSubscription', data);
       setExpiryDate(data.expiry_date);
