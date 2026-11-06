@@ -1109,20 +1109,17 @@ const OrderCard = React.memo(function OrderCard({ order, index, menuItemsMap, re
           <title>KOT - Table ${escapeHtml(order.table_no)}${batchLabel}</title>
           <style>
             @page { margin: 0; size: 58mm auto; }
-            /* ESC/POS 58mm printers default their left margin to 0mm — the printable strip
-               sits flush against the paper's left edge, not centered in the 58mm roll. This
-               printer's confirmed printable width is 384 dots @ 8 dots/mm = 48mm exactly, so
-               content is anchored near the left edge (small buffer for alignment slop) and
-               capped at 44mm wide — comfortably inside 48mm, not centered on the full 58mm. */
             body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 11px; color: black; background: white; width: 58mm; }
+            .kot-container { width: 58mm; padding: 0 3mm; box-sizing: border-box; }
+            .dotted-line { border: none; border-top: 1px dotted black; width: 100%; margin: 0; }
           </style>
         </head>
         <body>
-          <div style="width: 58mm; padding: 0 12mm 0 2mm; box-sizing: border-box;">
+          <div class="kot-container">
             <div style="text-align: center; margin-bottom: 5px;">
               <b style="font-size: 14px;">${escapeHtml(settings.print_business_name)}</b>
             </div>
-            <div style="text-align: center; margin-bottom: 5px;">
+            <div style="text-align: center; margin-bottom: 5px; line-height: 1.4;">
               <b>Table: ${escapeHtml(order.table_no)}</b><br/>
               <b>Date: ${format(new Date(order.created_at), 'd/M/yy')}</b><br/>
               <b>Waiter: cielocaferestro</b><br/>
@@ -1133,16 +1130,20 @@ const OrderCard = React.memo(function OrderCard({ order, index, menuItemsMap, re
             <div style="text-align: center; margin-bottom: 5px;">
               <b>Note: ${escapeHtml(order.notes)}</b>
             </div>` : ''}
-            <hr style="border: none; border-top: 1px solid black; margin: 5px 0;" />
+            <hr style="border: none; border-top: 1px solid black; margin: 5px 0; width: 100%;" />
             ${(itemsToPrint || []).map(item => `
               <div style="display: flex; align-items: flex-start; margin-bottom: 3px;">
-                <span style="width: 11mm;">${format(new Date(item.created_at || order.created_at), 'HH:mm')}</span>
-                <span style="width: 8mm; text-align: right; padding-right: 1mm;">${item.quantity}x</span>
-                <span style="flex: 1; word-wrap: break-word; font-size: 13px;">${escapeHtml(getItemName(item))}</span>
+                <span style="width: 11mm; shrink-0;">${format(new Date(item.created_at || order.created_at), 'HH:mm')}</span>
+                <span style="width: 7mm; text-align: right; padding-right: 2mm;">${item.quantity}x</span>
+                <span style="flex: 1; word-wrap: break-word; font-size: 13px; font-weight: bold;">${escapeHtml(getItemName(item))}</span>
               </div>
             `).join('')}
-            <!-- 30mm bottom feed so the printer auto-advances past the cutter without manual intervention -->
-            <div style="height: 30mm;"></div>
+            <!-- Minimum 10 mm gap below where information ends -->
+            <div style="height: 10mm;"></div>
+            <!-- Dotted line stretched across the KOT -->
+            <hr class="dotted-line" />
+            <!-- 20mm bottom feed so the printer auto-advances past the cutter without cutting off information or the dotted line -->
+            <div style="height: 20mm;"></div>
           </div>
         </body>
       </html>
@@ -2185,22 +2186,18 @@ export function BillModal({ order, menuItems, onClose, onMarkPaid, isMarkingPaid
           <title>Bill - Table ${escapeHtml(order.table_no)}</title>
           <style>
             @page { margin: 0; size: 58mm auto; }
-            /* ESC/POS 58mm printers default their left margin to 0mm — the printable strip
-               sits flush against the paper's left edge, not centered in the 58mm roll. This
-               printer's confirmed printable width is 384 dots @ 8 dots/mm = 48mm exactly, so
-               content is anchored near the left edge (small buffer for alignment slop) and
-               capped at 44mm wide — comfortably inside 48mm, not centered on the full 58mm. */
             body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 11px; color: black; background: white; width: 58mm; }
-            .bill-container { width: 58mm; padding: 0 12mm 0 2mm; box-sizing: border-box; }
+            .bill-container { width: 58mm; padding: 0 3mm; box-sizing: border-box; }
             .center { text-align: center; }
             .bold { font-weight: bold; }
-            .line { border: none; border-top: 1px dashed black; margin: 6px 0; }
-            .item-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; padding: 1px 0; }
+            .line { border: none; border-top: 1px dashed black; margin: 6px 0; width: 100%; }
+            .dotted-line { border: none; border-top: 1px dotted black; margin: 0; width: 100%; }
+            .item-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; padding: 1.5px 0; }
             .item-qty { width: 7mm; text-align: left; }
-            .item-name { flex: 1; text-align: left; word-wrap: break-word; padding-right: 1mm; }
-            .item-price { width: 9mm; text-align: right; white-space: nowrap; }
-            .item-total { width: 12mm; text-align: right; white-space: nowrap; }
-            .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; padding: 4px 0; }
+            .item-name { flex: 1; text-align: left; word-wrap: break-word; padding-right: 2mm; }
+            .item-price { width: 11mm; text-align: right; white-space: nowrap; }
+            .item-total { width: 13mm; text-align: right; white-space: nowrap; }
+            .total-row { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 13px; padding: 3px 0; }
             .footer { text-align: center; font-size: 11px; line-height: 1.5; margin-top: 10px; }
           </style>
         </head>
@@ -2270,6 +2267,12 @@ export function BillModal({ order, menuItems, onClose, onMarkPaid, isMarkingPaid
               ${settings.print_footer_1}<br/><br/>
               ${settings.print_footer_2}
             </div>
+            <!-- Minimum 10 mm gap below where information ends -->
+            <div style="height: 10mm;"></div>
+            <!-- Dotted line stretched across the bill -->
+            <hr class="dotted-line" />
+            <!-- 20mm bottom feed so printer auto-advances past the cutter without cutting off information or the dotted line -->
+            <div style="height: 20mm;"></div>
           </div>
         </body>
       </html>

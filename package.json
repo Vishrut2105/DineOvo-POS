@@ -1,7 +1,7 @@
 {
   "name": "dineovo-pos",
   "private": true,
-  "version": "1.0.42",
+  "version": "1.0.43",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -26,7 +26,7 @@
       }
     ],
     "directories": {
-      "output": "dist-electron"
+      "output": "release-dist"
     },
     "win": {
       "target": [

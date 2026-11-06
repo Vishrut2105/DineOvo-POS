@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DineOvo — 58mm Thermal Print Preview (Bill & KOT)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 30px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .header {
+      max-width: 800px;
+      width: 100%;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #38bdf8;
+      margin: 0 0 8px 0;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin: 0 0 16px 0;
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .btn {
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #f1f5f9;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #334155;
+    }
+    .btn-print {
+      background: #16a34a;
+      border-color: #15803d;
+      color: white;
+    }
+    .btn-print:hover {
+      background: #15803d;
+    }
+    .arena {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 30px;
+      background: #1e293b;
+      border-radius: 16px;
+      border: 1px solid #334155;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+    .paper-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .paper-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .thermal-paper {
+      width: 58mm;
+      background: #ffffff;
+      color: #000000;
+      font-family: Arial, sans-serif;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      border-radius: 2px 2px 0 0;
+      position: relative;
+    }
+    .ruler-top {
+      width: 100%;
+      text-align: center;
+      font-size: 9px;
+      font-family: monospace;
+      color: #64748b;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 2px 0;
+    }
+    .gap-indicator {
+      width: 100%;
+      height: 10mm;
+      background: rgba(239, 68, 68, 0.08);
+      border-left: 1px dashed #ef4444;
+      border-right: 1px dashed #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-family: monospace;
+      font-weight: bold;
+      color: #dc2626;
+      box-sizing: border-box;
+    }
+    .cutter-feed {
+      width: 100%;
+      height: 20mm;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-family: monospace;
+      color: #94a3b8;
+      border-bottom: 2px dashed #94a3b8;
+      box-sizing: border-box;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .header, .controls, .ruler-top, .paper-title { display: none !important; }
+      .arena { background: none; border: none; padding: 0; box-shadow: none; }
+      .thermal-paper { box-shadow: none; }
+      .gap-indicator { background: transparent; border: none; color: transparent; }
+      .cutter-feed { background: transparent; border: none; color: transparent; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">DineOvo 58mm Thermal Print Verification</div>
+    <div class="subtitle">
+      Inspect the corrected symmetric alignment, 10mm post-info gap, and stretched dotted cut line.
+    </div>
+    <div class="controls">
+      <button class="btn btn-print" onclick="window.print()">🖨️ Test Print (Ctrl + P)</button>
+    </div>
+  </div>
+
+  <div class="arena">
+
+    <!-- 1. CUSTOMER BILL -->
+    <div class="paper-wrapper">
+      <div class="paper-title">Customer Bill (58mm)</div>
+      <div class="thermal-paper">
+        <div class="ruler-top">← 58mm Paper Roll →</div>
+        <div style="width: 58mm; padding: 0 3mm; box-sizing: border-box; font-size: 11px; color: black;">
+          
+          <div style="text-align: center; margin-top: 6px; margin-bottom: 5px;">
+            <b style="font-size: 13px;">CIELO cafe &amp; resto</b><br/>
+            <span style="font-size: 11px;">(MIRA GROUP)</span>
+          </div>
+
+          <div style="text-align: center; font-size: 11px; line-height: 1.4; margin-bottom: 6px;">
+            6th floor, Asopalav One west, Sevasi -<br/>
+            Canal Rd , Vadodara, Gujarat 391101<br/>
+            9909377100<br/>
+            <b>Table: 04</b><br/>
+            <b>Time: 06/11/26 21:30</b><br/>
+            <b>Invoice No: INV-0142</b><br/>
+            <b>Order Id: 1042</b>
+          </div>
+
+          <hr style="border: none; border-top: 1px dashed black; margin: 6px 0; width: 100%;" />
+
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; padding: 1.5px 0;">
+            <span style="width: 7mm; text-align: left;">2x</span>
+            <span style="flex: 1; text-align: left; word-wrap: break-word; padding-right: 2mm;">Caffe Latte</span>
+            <span style="width: 11mm; text-align: right; white-space: nowrap;">180.00</span>
+            <span style="width: 13mm; text-align: right; white-space: nowrap;">360.00</span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; padding: 1.5px 0;">
+            <span style="width: 7mm; text-align: left;">1x</span>
+            <span style="flex: 1; text-align: left; word-wrap: break-word; padding-right: 2mm;">Classic Margherita Pizza</span>
+            <span style="width: 11mm; text-align: right; white-space: nowrap;">340.00</span>
+            <span style="width: 13mm; text-align: right; white-space: nowrap;">340.00</span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; padding: 1.5px 0;">
+            <span style="width: 7mm; text-align: left;">1x</span>
+            <span style="flex: 1; text-align: left; word-wrap: break-word; padding-right: 2mm;">Chocolate Brownie with Ice Cream</span>
+            <span style="width: 11mm; text-align: right; white-space: nowrap;">190.00</span>
+            <span style="width: 13mm; text-align: right; white-space: nowrap;">190.00</span>
+          </div>
+
+          <hr style="border: none; border-top: 1px dashed black; margin: 6px 0; width: 100%;" />
+
+          <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 1.5px 0;">
+            <span>Subtotal</span>
+            <span>Rs.890.00</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 1.5px 0;">
+            <span>CGST (2.50%)</span>
+            <span>Rs.22.25</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 1.5px 0;">
+            <span>SGST (2.50%)</span>
+            <span>Rs.22.25</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 1.5px 0;">
+            <span>Round Off</span>
+            <span>+Rs.0.50</span>
+          </div>
+
+          <hr style="border: none; border-top: 1px dashed black; margin: 6px 0; width: 100%;" />
+
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; padding: 3px 0;">
+            <span>TOTAL</span>
+            <span>Rs.935.00</span>
+          </div>
+
+          <div style="text-align: center; font-size: 11px; line-height: 1.5; margin-top: 10px;">
+            THANK YOU...<br/>VISIT AGAIN...<br/><br/>
+            'Love our service? Leave us a quick<br/>review on google'
+          </div>
+
+          <!-- Minimum 10mm gap below where information ends -->
+          <div class="gap-indicator">↕ 10.0 mm Clear Gap</div>
+
+          <!-- Dotted cut line stretched across -->
+          <hr style="border: none; border-top: 1.5px dotted #000; margin: 0; width: 100%;" />
+
+          <!-- Paper feed past cutter -->
+          <div class="cutter-feed">✂ Auto-Cutter Position (20mm)</div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. KITCHEN ORDER TICKET (KOT) -->
+    <div class="paper-wrapper">
+      <div class="paper-title">Kitchen Order Ticket (KOT 58mm)</div>
+      <div class="thermal-paper">
+        <div class="ruler-top">← 58mm Paper Roll →</div>
+        <div style="width: 58mm; padding: 0 3mm; box-sizing: border-box; font-size: 11px; color: black;">
+          
+          <div style="text-align: center; margin-top: 6px; margin-bottom: 5px;">
+            <b style="font-size: 14px;">CIELO cafe &amp; resto</b>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 5px; line-height: 1.4;">
+            <b>Table: 04</b><br/>
+            <b>Date: 06/11/26</b><br/>
+            <b>Waiter: cielocaferestro</b><br/>
+            <b>(MIRA GROUP)</b><br/>
+            <b>Order Id: 1042 (Added #1)</b>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 5px; font-size: 11px;">
+            <b>Note: Less spicy, extra cheese on pizza</b>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid black; margin: 5px 0; width: 100%;" />
+
+          <div style="display: flex; align-items: flex-start; margin-bottom: 4px;">
+            <span style="width: 11mm; font-size: 11px;">21:28</span>
+            <span style="width: 7mm; text-align: right; padding-right: 2mm; font-size: 12px; font-weight: bold;">2x</span>
+            <span style="flex: 1; word-wrap: break-word; font-size: 13px; font-weight: bold;">Caffe Latte</span>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; margin-bottom: 4px;">
+            <span style="width: 11mm; font-size: 11px;">21:28</span>
+            <span style="width: 7mm; text-align: right; padding-right: 2mm; font-size: 12px; font-weight: bold;">1x</span>
+            <span style="flex: 1; word-wrap: break-word; font-size: 13px; font-weight: bold;">Classic Margherita Pizza</span>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; margin-bottom: 4px;">
+            <span style="width: 11mm; font-size: 11px;">21:28</span>
+            <span style="width: 7mm; text-align: right; padding-right: 2mm; font-size: 12px; font-weight: bold;">1x</span>
+            <span style="flex: 1; word-wrap: break-word; font-size: 13px; font-weight: bold;">Chocolate Brownie with Ice Cream</span>
+          </div>
+
+          <!-- Minimum 10mm gap below where information ends -->
+          <div class="gap-indicator" style="margin-top: 6px;">↕ 10.0 mm Clear Gap</div>
+
+          <!-- Dotted cut line stretched across -->
+          <hr style="border: none; border-top: 1.5px dotted #000; margin: 0; width: 100%;" />
+
+          <!-- Paper feed past cutter -->
+          <div class="cutter-feed">✂ Auto-Cutter Position (20mm)</div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
+
