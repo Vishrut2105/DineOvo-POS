@@ -1110,7 +1110,7 @@ const OrderCard = React.memo(function OrderCard({ order, index, menuItemsMap, re
           <style>
             @page { margin: 0; size: 58mm auto; }
             body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 11px; color: black; background: white; width: 58mm; }
-            .kot-container { width: 58mm; padding: 0 3mm; box-sizing: border-box; }
+            .kot-container { width: 58mm; padding: 0 12mm 0 2mm; box-sizing: border-box; }
             .dotted-line { border: none; border-top: 1px dotted black; width: 100%; margin: 0; }
           </style>
         </head>
@@ -2187,7 +2187,7 @@ export function BillModal({ order, menuItems, onClose, onMarkPaid, isMarkingPaid
           <style>
             @page { margin: 0; size: 58mm auto; }
             body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 11px; color: black; background: white; width: 58mm; }
-            .bill-container { width: 58mm; padding: 0 3mm; box-sizing: border-box; }
+            .bill-container { width: 58mm; padding: 0 12mm 0 2mm; box-sizing: border-box; }
             .center { text-align: center; }
             .bold { font-weight: bold; }
             .line { border: none; border-top: 1px dashed black; margin: 6px 0; width: 100%; }

@@ -1,7 +1,7 @@
 {
   "name": "dineovo-pos",
   "private": true,
-  "version": "1.0.43",
+  "version": "1.0.44",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -32,7 +32,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "public/logo.png"
+      "icon": "public/logo.png",
+      "artifactName": "DineOvo-POS-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
